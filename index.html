@@ -10,86 +10,126 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
 <style>
-/* Layout: una colonna, scheda di rilievo sul campo: foto → posizione → note → salva */
+/* Layout: schermo unico da app — foto grande, posizione e note sotto, barra azioni fissa in basso */
 :root{
-  --bg:#f3f5f2; --surface:#ffffff; --fg:#1b2420; --muted:#5d6b65; --line:#d6ddd8;
-  --accent:#1f6b5a; --accent-fg:#ffffff; --rec:#c2412d; --ok:#2f7d46;
-  --display:"Barlow Semi Condensed",system-ui,sans-serif; --body:"Source Sans 3",system-ui,sans-serif;
-  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --bg:#eef2f0; --card:#ffffff; --fg:#14201b; --muted:#66756e; --line:#dbe3df; --soft:#e4ece8;
+  --accent:#0e7a5f; --accent-fg:#ffffff; --rec:#d6452f; --ok:#1f8a4c;
+  --font:"Figtree",system-ui,-apple-system,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,monospace;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root{
-  --bg:#111715; --surface:#1a2320; --fg:#e7eeea; --muted:#9aaba4; --line:#2c3833;
-  --accent:#5cc2a6; --accent-fg:#0b1512; --rec:#ef7b66; --ok:#6fcf8b; color-scheme:dark;}}
-*{box-sizing:border-box}
+  --bg:#0d1311; --card:#17201c; --fg:#e8efeb; --muted:#93a39c; --line:#26322d; --soft:#1f2a25;
+  --accent:#4fd1a5; --accent-fg:#06140f; --rec:#ff7a63; --ok:#6fdc96; color-scheme:dark;}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
-body{background:var(--bg);color:var(--fg);font:16px/1.45 var(--body);
-  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
-main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-top:14px}
-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-h1{font:600 1.7rem/1.1 var(--display);margin:0;letter-spacing:.01em}
-.stamp{font:.85rem var(--mono);color:var(--muted)}
-section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
-h2{font:600 .78rem/1 var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0}
-button,.btn{font:600 1rem var(--body);border:1px solid var(--line);background:transparent;color:var(--fg);
-  border-radius:8px;padding:12px 14px;min-height:48px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
-button:focus-visible,textarea:focus-visible,.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
-.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
-.rec{background:var(--rec);color:#fff;border-color:var(--rec)}
-button:disabled{opacity:.45;cursor:default}
-.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1 1 140px}
+body{background:var(--bg);color:var(--fg);font:16px/1.4 var(--font);
+  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(150px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:12px;padding-top:16px}
+header{display:flex;align-items:center;justify-content:space-between;padding:4px 2px 6px}
+h1{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;margin:0}
+.stamp{font:600 .85rem var(--font);color:var(--muted);background:var(--card);border:1px solid var(--line);padding:6px 10px;border-radius:999px;font-variant-numeric:tabular-nums}
+.card{background:var(--card);border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 1px 2px rgb(0 0 0 / .05)}
+.label{font-size:.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0}
+button{font:700 1rem var(--font);color:var(--fg);cursor:pointer;border:0}
+button:focus-visible,textarea:focus-visible,.shot:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+
+/* Foto */
+.shot{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;aspect-ratio:4/3;max-width:100%;
+  border-radius:20px;background:var(--card);border:2px dashed var(--line);color:var(--muted);cursor:pointer;overflow:hidden}
+.shot svg{width:52px;height:52px;color:var(--accent)}
+.shot strong{color:var(--fg);font-size:1.1rem}
 #photoInput{position:absolute;width:1px;height:1px;opacity:0}
-#preview{width:100%;border-radius:8px;display:block;max-height:60vh;object-fit:contain;background:var(--bg)}
-.gps{font:.95rem/1.5 var(--mono);font-variant-numeric:tabular-nums;word-break:break-word}
-.gps a{color:var(--accent)}
-.hint{color:var(--muted);font-size:.9rem;margin:0}
-textarea{width:100%;min-height:110px;font:1rem/1.45 var(--body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;resize:vertical}
+#preview{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.retake{position:absolute;right:10px;bottom:10px;background:rgb(0 0 0 / .6);color:#fff;font-weight:700;font-size:.85rem;padding:7px 12px;border-radius:999px}
+.shot.has-photo{border-style:solid;border-color:transparent}
+
+/* Posizione */
+.place{display:flex;align-items:center;gap:12px}
+.pin{flex:none;width:40px;height:40px;border-radius:12px;background:var(--soft);display:grid;place-items:center;color:var(--accent)}
+.pin svg{width:22px;height:22px}
+#gps{flex:1;min-width:0;font-size:.95rem;color:var(--muted)}
+#gps .addr{color:var(--fg);font-weight:700;line-height:1.3}
+#gps .coords{font:.8rem var(--mono);font-variant-numeric:tabular-nums}
+#gps a{color:var(--accent);font-size:.85rem;font-weight:700;text-decoration:none}
+.icon-btn{flex:none;width:44px;height:44px;border-radius:12px;background:var(--soft);display:grid;place-items:center;color:var(--fg)}
+.icon-btn svg{width:20px;height:20px}
+
+/* Nota */
+textarea{width:100%;min-height:96px;border:0;background:var(--soft);border-radius:14px;padding:12px;font:1rem/1.45 var(--font);color:var(--fg);resize:vertical}
+textarea::placeholder{color:var(--muted)}
+
+/* Vocali */
+.voice{display:flex;align-items:center;gap:14px}
+#recBtn{flex:none;width:64px;height:64px;border-radius:50%;background:var(--soft);color:var(--rec);display:grid;place-items:center}
+#recBtn svg{width:28px;height:28px}
+#recBtn.rec{background:var(--rec);color:#fff}
+#recLabel{font-weight:700}
+.voice small{display:block;color:var(--muted);font-size:.85rem}
 .clips{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
-.clips li{display:flex;align-items:center;gap:8px}.clips audio{flex:1;min-width:0;height:40px}
-.clips button{min-height:40px;padding:6px 10px}
-#status{min-height:1.4em;margin:0;font-weight:600}
+.clips:empty{display:none}
+.clips li{display:flex;align-items:center;gap:8px}
+.clips audio{flex:1;min-width:0;height:40px}
+.clips button{width:40px;height:40px;border-radius:10px;background:var(--soft);color:var(--muted);font-size:1.1rem}
+@media (prefers-reduced-motion:no-preference){.pulse{animation:p 1.2s ease-in-out infinite}@keyframes p{50%{box-shadow:0 0 0 10px rgb(214 69 47 / .18)}}}
+
+/* Barra azioni */
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
+  padding:10px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.bar-in{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.actions{display:flex;gap:10px}
+#newBtn{flex:none;height:54px;padding:0 18px;border-radius:16px;background:var(--soft)}
+#saveBtn{flex:1;height:54px;border-radius:16px;background:var(--accent);color:var(--accent-fg);font-size:1.05rem}
+#saveBtn:disabled{opacity:.4;cursor:default}
+#status{margin:0;min-height:1.2em;font-size:.88rem;font-weight:600;color:var(--muted);text-align:center}
+#status:empty{display:none}
 #status.ok{color:var(--ok)}#status.err{color:var(--rec)}
-@media (prefers-reduced-motion:no-preference){.pulse{animation:p 1s ease-in-out infinite}@keyframes p{50%{opacity:.6}}}
+#shareBtn{background:none;color:var(--accent);font-size:.9rem;padding:2px}
+#saveHint{display:none}
 </style>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600&family=Source+Sans+3:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700;800&display=swap">
 </head>
 <body>
 <main>
   <header><h1>Foto Note</h1><span class="stamp" id="clock"></span></header>
 
-  <section>
-    <h2>Foto</h2>
-    <label class="btn primary" for="photoInput">Scatta foto</label>
-    <input id="photoInput" type="file" accept="image/*" capture="environment">
-    <img id="preview" alt="Anteprima della foto" hidden>
-  </section>
+  <label class="shot" id="shot" for="photoInput">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+    <strong>Scatta una foto</strong>
+    <span>La posizione si salva da sola</span>
+    <img id="preview" alt="Foto scattata" hidden>
+    <span class="retake" id="retake" hidden>Rifai foto</span>
+  </label>
+  <input id="photoInput" type="file" accept="image/*" capture="environment">
 
-  <section>
-    <h2>Posizione</h2>
-    <div class="gps" id="gps">Nessuna posizione rilevata.</div>
-    <button id="gpsBtn" type="button">Aggiorna posizione</button>
-    <p class="hint">La posizione viene rilevata automaticamente quando scatta la foto.</p>
-  </section>
+  <div class="card place">
+    <div class="pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></div>
+    <div id="gps">Nessuna posizione rilevata.</div>
+    <button id="gpsBtn" class="icon-btn" type="button" aria-label="Aggiorna posizione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+  </div>
 
-  <section>
-    <h2>Nota scritta</h2>
-    <textarea id="note" placeholder="Es. reparto, osservazioni, cose da sistemare…"></textarea>
-  </section>
+  <div class="card">
+    <p class="label">Nota</p>
+    <textarea id="note" placeholder="Scriva qui le osservazioni…"></textarea>
+  </div>
 
-  <section>
-    <h2>Note vocali</h2>
-    <button id="recBtn" type="button">● Registra</button>
+  <div class="card">
+    <div class="voice">
+      <button id="recBtn" type="button" aria-label="Registra nota vocale"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      <div><span id="recLabel">Nota vocale</span><small id="recSub">Tocchi il microfono per registrare</small></div>
+    </div>
     <ul class="clips" id="clips"></ul>
-  </section>
-
-  <section>
-    <button id="saveBtn" class="primary" type="button" disabled>Salva su Drive</button>
-    <p class="hint" id="saveHint">Si apre il menu Condividi: scelga <b>Drive</b> e la cartella. Vengono salvati la foto (con GPS), un file di testo con posizione e nota, e le note vocali.</p>
-    <p id="status" role="status"></p>
-    <button id="shareBtn" type="button" hidden>Condividi in altro modo</button>
-    <button id="newBtn" type="button">Nuova voce</button>
-  </section>
+  </div>
 </main>
+
+<div class="bar"><div class="bar-in">
+  <p id="status" role="status"></p>
+  <div class="actions">
+    <button id="newBtn" type="button">Nuova</button>
+    <button id="saveBtn" type="button" disabled>Salva su Drive</button>
+  </div>
+  <button id="shareBtn" type="button" hidden>Condividi in altro modo</button>
+  <p id="saveHint"></p>
+</div></div>
 
 <script>
 /* ID client OAuth di Google Cloud: se vuoto, l'app usa il menu Condividi */
@@ -119,10 +159,10 @@ function renderGps(){
   const p=state.pos; if(!p) return;
   const url=`https://maps.google.com/?q=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
   $('gps').innerHTML='';
-  const lines=[`${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`, `precisione ±${p.acc} m`];
-  if(state.addr) lines.push(state.addr);
-  lines.forEach(t=>{const d=document.createElement('div'); d.textContent=t; $('gps').appendChild(d);});
-  const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.textContent='Apri in Google Maps'; $('gps').appendChild(a);
+  const add=(cls,txt)=>{const d=document.createElement('div'); d.className=cls; d.textContent=txt; $('gps').appendChild(d);};
+  add('addr', state.addr ? state.addr.split(',').slice(0,3).join(',') : 'Posizione rilevata');
+  add('coords', `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)} · ±${p.acc} m`);
+  const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.textContent='Apri in Maps'; $('gps').appendChild(a);
 }
 async function reverse(){
   try{
@@ -138,7 +178,7 @@ $('gpsBtn').onclick=locate;
 $('photoInput').addEventListener('change', e=>{
   const f=e.target.files[0]; if(!f) return;
   state.photo=f; state.photoTime=new Date();
-  $('preview').src=URL.createObjectURL(f); $('preview').hidden=false;
+  $('preview').src=URL.createObjectURL(f); $('preview').hidden=false; $('retake').hidden=false; $('shot').classList.add('has-photo');
   locate(); refreshSave(); setStatus('');
 });
 
@@ -155,10 +195,10 @@ $('recBtn').onclick=async()=>{
       stream.getTracks().forEach(t=>t.stop());
       const type=rec.mimeType||mime||'audio/webm';
       state.clips.push({ blob:new Blob(chunks,{type}), type, t:new Date() });
-      $('recBtn').textContent='● Registra'; $('recBtn').classList.remove('rec','pulse');
+      $('recBtn').classList.remove('rec','pulse'); $('recLabel').textContent='Nota vocale'; $('recSub').textContent='Tocchi il microfono per registrarne un\'altra';
       renderClips(); refreshSave();
     };
-    rec.start(); $('recBtn').textContent='■ Ferma registrazione'; $('recBtn').classList.add('rec','pulse');
+    rec.start(); $('recBtn').classList.add('rec','pulse'); $('recLabel').textContent='Registrazione in corso…'; $('recSub').textContent='Tocchi di nuovo per fermare';
   }catch(err){ setStatus('Microfono non disponibile: consenta l\'accesso nelle impostazioni del sito.','err'); }
 };
 function renderClips(){
@@ -166,7 +206,7 @@ function renderClips(){
   state.clips.forEach((c,i)=>{
     const li=document.createElement('li');
     const au=document.createElement('audio'); au.controls=true; au.src=URL.createObjectURL(c.blob);
-    const del=document.createElement('button'); del.type='button'; del.textContent='Elimina'; del.setAttribute('aria-label',`Elimina nota vocale ${i+1}`);
+    const del=document.createElement('button'); del.type='button'; del.textContent='✕'; del.setAttribute('aria-label',`Elimina nota vocale ${i+1}`);
     del.onclick=()=>{ state.clips.splice(i,1); renderClips(); refreshSave(); };
     li.append(au,del); ul.appendChild(li);
   });
@@ -293,7 +333,7 @@ async function upload(){
 }
 $('newBtn').onclick=()=>{
   Object.assign(state,{photo:null,photoTime:null,pos:null,addr:'',clips:[]});
-  $('preview').hidden=true; $('preview').removeAttribute('src'); $('photoInput').value='';
+  $('preview').hidden=true; $('preview').removeAttribute('src'); $('retake').hidden=true; $('shot').classList.remove('has-photo'); $('photoInput').value='';
   $('note').value=''; $('gps').textContent='Nessuna posizione rilevata.'; renderClips(); refreshSave(); setStatus('');
 };
 

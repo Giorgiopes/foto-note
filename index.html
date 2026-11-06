@@ -125,7 +125,7 @@ textarea::placeholder{color:var(--muted)}
   <p id="status" role="status"></p>
   <div class="actions">
     <button id="newBtn" type="button">Nuova</button>
-    <button id="saveBtn" type="button" disabled>Salva su Drive</button>
+    <button id="saveBtn" type="button" disabled>Salva o invia</button>
   </div>
   <button id="shareBtn" type="button" hidden>Condividi in altro modo</button>
   <p id="saveHint"></p>
@@ -262,7 +262,7 @@ $('saveBtn').onclick=async()=>{
   if(!prepared){
     setStatus('Preparo i file…'); clearTimeout(prepTimer); const v=++prepVer;
     const p=await buildFiles(); if(v!==prepVer) return; prepared=p;
-    setStatus('File pronti: tocchi di nuovo "Salva su Drive".','ok'); return;
+    setStatus('File pronti: tocchi di nuovo "Salva o invia".','ok'); return;
   }
   if(CLIENT_ID) driveSave(); else shareFiles();
 };
@@ -270,14 +270,14 @@ async function shareFiles(){
   if(!prepared) return;
   const {files,b}=prepared;
   if(navigator.canShare && navigator.canShare({files})){
-    try{ await navigator.share({files, title:`Foto Note ${b}`}); setStatus('Inviato al menu Condividi. Controlli su Drive che il caricamento sia completato.','ok'); }
+    try{ await navigator.share({files, title:`Foto Note ${b}`}); setStatus('Inviato al menu Condividi. File inviati all'app scelta.','ok'); }
     catch(e){ setStatus(e.name==='AbortError'?'Condivisione annullata.':'Condivisione non riuscita: '+e.message, e.name==='AbortError'?'':'err'); }
   } else {
     files.forEach(f=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name; a.click(); });
     setStatus('Questo browser non supporta la condivisione: i file sono stati scaricati in Download.','ok');
   }
 }
-$('shareBtn').onclick=()=>{ if(prepared) shareFiles(); else setStatus('Prima tocchi "Salva su Drive" per preparare i file.'); };
+$('shareBtn').onclick=()=>{ if(prepared) shareFiles(); else setStatus('Prima tocchi "Salva o invia" per preparare i file.'); };
 
 /* ---------- Caricamento automatico su Google Drive ---------- */
 const FOLDER_NAME='Foto Note';
@@ -302,7 +302,7 @@ function driveSave(){
 }
 async function gapi(url, opts={}){
   const r=await fetch(url,{...opts, headers:{Authorization:'Bearer '+ls.get('tok'), ...(opts.headers||{})}});
-  if(r.status===401){ ls.set('tokExp','0'); throw new Error('sessione scaduta: tocchi di nuovo "Salva su Drive"'); }
+  if(r.status===401){ ls.set('tokExp','0'); throw new Error('sessione scaduta: tocchi di nuovo "Salva o invia"'); }
   if(!r.ok) throw new Error(`errore Drive ${r.status}`);
   return r.json();
 }
@@ -316,7 +316,7 @@ async function folderId(){
   ls.set('folderId',id); return id;
 }
 async function upload(){
-  if(!prepared){ setStatus('Prima tocchi "Salva su Drive" per preparare i file.'); return; }
+  if(!prepared){ setStatus('Prima tocchi "Salva o invia" per preparare i file.'); return; }
   const {files}=prepared; $('saveBtn').disabled=true;
   try{
     const parent=await folderId();

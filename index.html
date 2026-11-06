@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Foto Note</title>
+<meta name="theme-color" content="#1f3a34">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
+<style>
+/* Layout: una colonna, scheda di rilievo sul campo: foto → posizione → note → salva */
+:root{
+  --bg:#f3f5f2; --surface:#ffffff; --fg:#1b2420; --muted:#5d6b65; --line:#d6ddd8;
+  --accent:#1f6b5a; --accent-fg:#ffffff; --rec:#c2412d; --ok:#2f7d46;
+  --display:"Barlow Semi Condensed",system-ui,sans-serif; --body:"Source Sans 3",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#111715; --surface:#1a2320; --fg:#e7eeea; --muted:#9aaba4; --line:#2c3833;
+  --accent:#5cc2a6; --accent-fg:#0b1512; --rec:#ef7b66; --ok:#6fcf8b; color-scheme:dark;}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:16px/1.45 var(--body);
+  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-top:14px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+h1{font:600 1.7rem/1.1 var(--display);margin:0;letter-spacing:.01em}
+.stamp{font:.85rem var(--mono);color:var(--muted)}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+h2{font:600 .78rem/1 var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0}
+button,.btn{font:600 1rem var(--body);border:1px solid var(--line);background:transparent;color:var(--fg);
+  border-radius:8px;padding:12px 14px;min-height:48px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+button:focus-visible,textarea:focus-visible,.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.rec{background:var(--rec);color:#fff;border-color:var(--rec)}
+button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1 1 140px}
+#photoInput{position:absolute;width:1px;height:1px;opacity:0}
+#preview{width:100%;border-radius:8px;display:block;max-height:60vh;object-fit:contain;background:var(--bg)}
+.gps{font:.95rem/1.5 var(--mono);font-variant-numeric:tabular-nums;word-break:break-word}
+.gps a{color:var(--accent)}
+.hint{color:var(--muted);font-size:.9rem;margin:0}
+textarea{width:100%;min-height:110px;font:1rem/1.45 var(--body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;resize:vertical}
+.clips{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.clips li{display:flex;align-items:center;gap:8px}.clips audio{flex:1;min-width:0;height:40px}
+.clips button{min-height:40px;padding:6px 10px}
+#status{min-height:1.4em;margin:0;font-weight:600}
+#status.ok{color:var(--ok)}#status.err{color:var(--rec)}
+@media (prefers-reduced-motion:no-preference){.pulse{animation:p 1s ease-in-out infinite}@keyframes p{50%{opacity:.6}}}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600&family=Source+Sans+3:wght@400;600&display=swap">
+</head>
+<body>
+<main>
+  <header><h1>Foto Note</h1><span class="stamp" id="clock"></span></header>
+
+  <section>
+    <h2>Foto</h2>
+    <label class="btn primary" for="photoInput">Scatta foto</label>
+    <input id="photoInput" type="file" accept="image/*" capture="environment">
+    <img id="preview" alt="Anteprima della foto" hidden>
+  </section>
+
+  <section>
+    <h2>Posizione</h2>
+    <div class="gps" id="gps">Nessuna posizione rilevata.</div>
+    <button id="gpsBtn" type="button">Aggiorna posizione</button>
+    <p class="hint">La posizione viene rilevata automaticamente quando scatta la foto.</p>
+  </section>
+
+  <section>
+    <h2>Nota scritta</h2>
+    <textarea id="note" placeholder="Es. reparto, osservazioni, cose da sistemare…"></textarea>
+  </section>
+
+  <section>
+    <h2>Note vocali</h2>
+    <button id="recBtn" type="button">● Registra</button>
+    <ul class="clips" id="clips"></ul>
+  </section>
+
+  <section>
+    <button id="saveBtn" class="primary" type="button" disabled>Salva su Drive</button>
+    <p class="hint">Si apre il menu Condividi: scelga <b>Drive</b> e la cartella. Vengono salvati la foto (con GPS), un file di testo con posizione e nota, e le note vocali.</p>
+    <p id="status" role="status"></p>
+    <button id="newBtn" type="button">Nuova voce</button>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const state = { photo:null, photoTime:null, pos:null, addr:'', clips:[] };
+const pad = n => String(n).padStart(2,'0');
+
+function tick(){ const d=new Date(); $('clock').textContent=`${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+tick(); setInterval(tick, 15000);
+
+function setStatus(msg, kind=''){ $('status').textContent=msg; $('status').className=kind; }
+function refreshSave(){ $('saveBtn').disabled = !(state.photo || state.clips.length || $('note').value.trim()); }
+
+/* ---------- GPS ---------- */
+function locate(){
+  if(!('geolocation' in navigator)){ $('gps').textContent='Questo browser non fornisce la posizione.'; return; }
+  $('gps').textContent='Rilevamento posizione…';
+  navigator.geolocation.getCurrentPosition(p=>{
+    state.pos = { lat:p.coords.latitude, lon:p.coords.longitude, acc:Math.round(p.coords.accuracy), alt:p.coords.altitude, t:new Date(p.timestamp) };
+    state.addr=''; renderGps(); reverse();
+  }, e=>{
+    $('gps').textContent = e.code===1 ? 'Permesso posizione negato: lo abiliti nelle impostazioni del sito.' : 'Posizione non disponibile. Riprovi all\'aperto o con il GPS attivo.';
+  }, { enableHighAccuracy:true, timeout:20000, maximumAge:10000 });
+}
+function renderGps(){
+  const p=state.pos; if(!p) return;
+  const url=`https://maps.google.com/?q=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
+  $('gps').innerHTML='';
+  const lines=[`${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`, `precisione ±${p.acc} m`];
+  if(state.addr) lines.push(state.addr);
+  lines.forEach(t=>{const d=document.createElement('div'); d.textContent=t; $('gps').appendChild(d);});
+  const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.textContent='Apri in Google Maps'; $('gps').appendChild(a);
+}
+async function reverse(){
+  try{
+    const p=state.pos;
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=it&lat=${p.lat}&lon=${p.lon}`);
+    if(!r.ok) return; const j=await r.json();
+    if(j.display_name && state.pos===p){ state.addr=j.display_name; renderGps(); }
+  }catch(_){}
+}
+$('gpsBtn').onclick=locate;
+
+/* ---------- Foto ---------- */
+$('photoInput').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  state.photo=f; state.photoTime=new Date();
+  $('preview').src=URL.createObjectURL(f); $('preview').hidden=false;
+  locate(); refreshSave(); setStatus('');
+});
+
+/* ---------- Note vocali ---------- */
+let rec=null, chunks=[];
+const mime = ['audio/mp4','audio/webm;codecs=opus','audio/webm'].find(m=>window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
+$('recBtn').onclick=async()=>{
+  if(rec && rec.state==='recording'){ rec.stop(); return; }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    chunks=[]; rec=new MediaRecorder(stream, mime?{mimeType:mime}:undefined);
+    rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+    rec.onstop=()=>{
+      stream.getTracks().forEach(t=>t.stop());
+      const type=rec.mimeType||mime||'audio/webm';
+      state.clips.push({ blob:new Blob(chunks,{type}), type, t:new Date() });
+      $('recBtn').textContent='● Registra'; $('recBtn').classList.remove('rec','pulse');
+      renderClips(); refreshSave();
+    };
+    rec.start(); $('recBtn').textContent='■ Ferma registrazione'; $('recBtn').classList.add('rec','pulse');
+  }catch(err){ setStatus('Microfono non disponibile: consenta l\'accesso nelle impostazioni del sito.','err'); }
+};
+function renderClips(){
+  const ul=$('clips'); ul.innerHTML='';
+  state.clips.forEach((c,i)=>{
+    const li=document.createElement('li');
+    const au=document.createElement('audio'); au.controls=true; au.src=URL.createObjectURL(c.blob);
+    const del=document.createElement('button'); del.type='button'; del.textContent='Elimina'; del.setAttribute('aria-label',`Elimina nota vocale ${i+1}`);
+    del.onclick=()=>{ state.clips.splice(i,1); renderClips(); refreshSave(); };
+    li.append(au,del); ul.appendChild(li);
+  });
+}
+$('note').addEventListener('input', refreshSave);
+
+/* ---------- EXIF GPS ---------- */
+function toDMS(v){ v=Math.abs(v); const d=Math.floor(v), m=Math.floor((v-d)*60), s=Math.round(((v-d)*60-m)*60*10000); return [[d,1],[m,1],[s,10000]]; }
+function readDataURL(blob){ return new Promise((ok,ko)=>{const r=new FileReader(); r.onload=()=>ok(r.result); r.onerror=ko; r.readAsDataURL(blob);}); }
+async function photoWithGps(file){
+  if(!state.pos || !window.piexif || !/jpe?g/i.test(file.type)) return file;
+  try{
+    const data=await readDataURL(file);
+    let exif; try{ exif=piexif.load(data); }catch(_){ exif={'0th':{},'Exif':{},'GPS':{},'1st':{},thumbnail:null}; }
+    const p=state.pos, G=piexif.GPSIFD;
+    exif.GPS={ [G.GPSVersionID]:[2,3,0,0], [G.GPSLatitudeRef]:p.lat>=0?'N':'S', [G.GPSLatitude]:toDMS(p.lat),
+      [G.GPSLongitudeRef]:p.lon>=0?'E':'W', [G.GPSLongitude]:toDMS(p.lon) };
+    if(p.alt!=null){ exif.GPS[G.GPSAltitudeRef]=p.alt<0?1:0; exif.GPS[G.GPSAltitude]=[Math.round(Math.abs(p.alt)*100),100]; }
+    const out=piexif.insert(piexif.dump(exif), data);
+    return await (await fetch(out)).blob();
+  }catch(_){ return file; }
+}
+
+/* ---------- Salvataggio ---------- */
+function baseName(d){ return `${pad(d.getMonth()+1)}_${String(d.getFullYear()).slice(2)}_${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`; }
+function noteText(d){
+  const L=[`Foto Note – ${d.toLocaleString('it-IT')}`,''];
+  if(state.pos){ const p=state.pos;
+    L.push(`Coordinate: ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)} (±${p.acc} m)`);
+    if(state.addr) L.push(`Indirizzo: ${state.addr}`);
+    L.push(`Mappa: https://maps.google.com/?q=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`);
+  } else L.push('Posizione: non rilevata');
+  L.push('', 'Nota:', $('note').value.trim() || '(nessuna)');
+  if(state.clips.length) L.push('', `Note vocali allegate: ${state.clips.length}`);
+  return L.join('\n');
+}
+$('saveBtn').onclick=async()=>{
+  const d=state.photoTime||new Date(), b=baseName(d), files=[];
+  setStatus('Preparo i file…');
+  if(state.photo) files.push(new File([await photoWithGps(state.photo)], `${b}_foto.jpg`, {type:'image/jpeg'}));
+  files.push(new File([noteText(d)], `${b}_nota.txt`, {type:'text/plain'}));
+  state.clips.forEach((c,i)=>{ const ext=/mp4/.test(c.type)?'m4a':'weba';
+    files.push(new File([c.blob], `${b}_vocale${state.clips.length>1?'_'+(i+1):''}.${ext}`, {type:c.type.split(';')[0]})); });
+  if(navigator.canShare && navigator.canShare({files})){
+    try{ await navigator.share({files, title:`Foto Note ${b}`}); setStatus('Inviato al menu Condividi. Controlli su Drive che il caricamento sia completato.','ok'); }
+    catch(e){ setStatus(e.name==='AbortError'?'Condivisione annullata.':'Condivisione non riuscita: '+e.message, e.name==='AbortError'?'':'err'); }
+  } else {
+    files.forEach(f=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name; a.click(); });
+    setStatus('Questo browser non supporta la condivisione: i file sono stati scaricati in Download.','ok');
+  }
+};
+$('newBtn').onclick=()=>{
+  Object.assign(state,{photo:null,photoTime:null,pos:null,addr:'',clips:[]});
+  $('preview').hidden=true; $('preview').removeAttribute('src'); $('photoInput').value='';
+  $('note').value=''; $('gps').textContent='Nessuna posizione rilevata.'; renderClips(); refreshSave(); setStatus('');
+};
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>

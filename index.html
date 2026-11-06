@@ -84,13 +84,16 @@ textarea{width:100%;min-height:110px;font:1rem/1.45 var(--body);color:var(--fg);
 
   <section>
     <button id="saveBtn" class="primary" type="button" disabled>Salva su Drive</button>
-    <p class="hint">Si apre il menu Condividi: scelga <b>Drive</b> e la cartella. Vengono salvati la foto (con GPS), un file di testo con posizione e nota, e le note vocali.</p>
+    <p class="hint" id="saveHint">Si apre il menu Condividi: scelga <b>Drive</b> e la cartella. Vengono salvati la foto (con GPS), un file di testo con posizione e nota, e le note vocali.</p>
     <p id="status" role="status"></p>
+    <button id="shareBtn" type="button" hidden>Condividi in altro modo</button>
     <button id="newBtn" type="button">Nuova voce</button>
   </section>
 </main>
 
 <script>
+/* ID client OAuth di Google Cloud: se vuoto, l'app usa il menu Condividi */
+const CLIENT_ID='';
 const $ = id => document.getElementById(id);
 const state = { photo:null, photoTime:null, pos:null, addr:'', clips:[] };
 const pad = n => String(n).padStart(2,'0');
@@ -221,6 +224,10 @@ $('saveBtn').onclick=async()=>{
     const p=await buildFiles(); if(v!==prepVer) return; prepared=p;
     setStatus('File pronti: tocchi di nuovo "Salva su Drive".','ok'); return;
   }
+  if(CLIENT_ID) driveSave(); else shareFiles();
+};
+async function shareFiles(){
+  if(!prepared) return;
   const {files,b}=prepared;
   if(navigator.canShare && navigator.canShare({files})){
     try{ await navigator.share({files, title:`Foto Note ${b}`}); setStatus('Inviato al menu Condividi. Controlli su Drive che il caricamento sia completato.','ok'); }
@@ -229,13 +236,68 @@ $('saveBtn').onclick=async()=>{
     files.forEach(f=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name; a.click(); });
     setStatus('Questo browser non supporta la condivisione: i file sono stati scaricati in Download.','ok');
   }
-};
+}
+$('shareBtn').onclick=()=>{ if(prepared) shareFiles(); else setStatus('Prima tocchi "Salva su Drive" per preparare i file.'); };
+
+/* ---------- Caricamento automatico su Google Drive ---------- */
+const FOLDER_NAME='Foto Note';
+let tokenClient=null;
+const ls={ get:k=>{try{return localStorage.getItem(k)}catch(_){return null}}, set:(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}} };
+function tokenValid(){ return ls.get('tok') && Number(ls.get('tokExp')) > Date.now()+60000; }
+function initDrive(){
+  if(!CLIENT_ID) return;
+  $('saveHint').textContent=`I file vengono caricati direttamente nella cartella "${FOLDER_NAME}" del Suo Google Drive. La prima volta Google Le chiede di accedere.`;
+  $('shareBtn').hidden=false;
+  const s=document.createElement('script'); s.src='https://accounts.google.com/gsi/client'; s.async=true;
+  s.onload=()=>{ tokenClient=google.accounts.oauth2.initTokenClient({ client_id:CLIENT_ID, scope:'https://www.googleapis.com/auth/drive.file', login_hint:'giorgiopes@gmail.com',
+    callback:r=>{ if(r.error){ setStatus('Accesso a Google non riuscito: '+r.error,'err'); return; }
+      ls.set('tok',r.access_token); ls.set('tokExp',String(Date.now()+r.expires_in*1000)); ls.set('consent','1'); upload(); } }); };
+  document.head.appendChild(s);
+}
+function driveSave(){
+  if(tokenValid()){ upload(); return; }
+  if(!tokenClient){ setStatus('Collegamento a Google in caricamento, riprovi tra un attimo.'); return; }
+  setStatus('Accesso a Google…');
+  tokenClient.requestAccessToken({prompt: ls.get('consent')?'':'consent'});
+}
+async function gapi(url, opts={}){
+  const r=await fetch(url,{...opts, headers:{Authorization:'Bearer '+ls.get('tok'), ...(opts.headers||{})}});
+  if(r.status===401){ ls.set('tokExp','0'); throw new Error('sessione scaduta: tocchi di nuovo "Salva su Drive"'); }
+  if(!r.ok) throw new Error(`errore Drive ${r.status}`);
+  return r.json();
+}
+async function folderId(){
+  const cached=ls.get('folderId');
+  if(cached){ try{ const f=await gapi(`https://www.googleapis.com/drive/v3/files/${cached}?fields=id,trashed`); if(!f.trashed) return f.id; }catch(e){ if(/sessione/.test(e.message)) throw e; } }
+  const q=encodeURIComponent(`name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const l=await gapi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`);
+  let id=l.files && l.files[0] && l.files[0].id;
+  if(!id){ const f=await gapi('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:FOLDER_NAME,mimeType:'application/vnd.google-apps.folder'})}); id=f.id; }
+  ls.set('folderId',id); return id;
+}
+async function upload(){
+  if(!prepared){ setStatus('Prima tocchi "Salva su Drive" per preparare i file.'); return; }
+  const {files}=prepared; $('saveBtn').disabled=true;
+  try{
+    const parent=await folderId();
+    for(let i=0;i<files.length;i++){
+      const f=files[i]; setStatus(`Caricamento ${i+1} di ${files.length}: ${f.name}`);
+      const bd='fn'+Math.random().toString(36).slice(2);
+      const body=new Blob([`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`, JSON.stringify({name:f.name,parents:[parent]}),
+        `\r\n--${bd}\r\nContent-Type: ${f.type||'application/octet-stream'}\r\n\r\n`, f, `\r\n--${bd}--`]);
+      await gapi('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Content-Type':`multipart/related; boundary=${bd}`},body});
+    }
+    setStatus(`Salvati ${files.length} file nella cartella "${FOLDER_NAME}" su Drive.`,'ok');
+  }catch(e){ setStatus('Caricamento non riuscito: '+e.message+'. Può usare "Condividi in altro modo".','err'); }
+  finally{ refreshSave(); }
+}
 $('newBtn').onclick=()=>{
   Object.assign(state,{photo:null,photoTime:null,pos:null,addr:'',clips:[]});
   $('preview').hidden=true; $('preview').removeAttribute('src'); $('photoInput').value='';
   $('note').value=''; $('gps').textContent='Nessuna posizione rilevata.'; renderClips(); refreshSave(); setStatus('');
 };
 
+initDrive();
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>

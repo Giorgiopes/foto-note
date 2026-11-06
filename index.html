@@ -99,7 +99,7 @@ function tick(){ const d=new Date(); $('clock').textContent=`${pad(d.getDate())}
 tick(); setInterval(tick, 15000);
 
 function setStatus(msg, kind=''){ $('status').textContent=msg; $('status').className=kind; }
-function refreshSave(){ $('saveBtn').disabled = !(state.photo || state.clips.length || $('note').value.trim()); }
+function refreshSave(){ $('saveBtn').disabled = !(state.photo || state.clips.length || $('note').value.trim()); if(typeof schedulePrep==='function') schedulePrep(); }
 
 /* ---------- GPS ---------- */
 function locate(){
@@ -107,7 +107,7 @@ function locate(){
   $('gps').textContent='Rilevamento posizione…';
   navigator.geolocation.getCurrentPosition(p=>{
     state.pos = { lat:p.coords.latitude, lon:p.coords.longitude, acc:Math.round(p.coords.accuracy), alt:p.coords.altitude, t:new Date(p.timestamp) };
-    state.addr=''; renderGps(); reverse();
+    state.addr=''; renderGps(); reverse(); refreshSave();
   }, e=>{
     $('gps').textContent = e.code===1 ? 'Permesso posizione negato: lo abiliti nelle impostazioni del sito.' : 'Posizione non disponibile. Riprovi all\'aperto o con il GPS attivo.';
   }, { enableHighAccuracy:true, timeout:20000, maximumAge:10000 });
@@ -126,7 +126,7 @@ async function reverse(){
     const p=state.pos;
     const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=it&lat=${p.lat}&lon=${p.lon}`);
     if(!r.ok) return; const j=await r.json();
-    if(j.display_name && state.pos===p){ state.addr=j.display_name; renderGps(); }
+    if(j.display_name && state.pos===p){ state.addr=j.display_name; renderGps(); refreshSave(); }
   }catch(_){}
 }
 $('gpsBtn').onclick=locate;
@@ -200,13 +200,28 @@ function noteText(d){
   if(state.clips.length) L.push('', `Note vocali allegate: ${state.clips.length}`);
   return L.join('\n');
 }
-$('saveBtn').onclick=async()=>{
+/* I file si preparano in anticipo: Android consente il menu Condividi solo subito dopo il tocco */
+let prepared=null, prepVer=0, prepTimer=null;
+async function buildFiles(){
   const d=state.photoTime||new Date(), b=baseName(d), files=[];
-  setStatus('Preparo i file…');
   if(state.photo) files.push(new File([await photoWithGps(state.photo)], `${b}_foto.jpg`, {type:'image/jpeg'}));
   files.push(new File([noteText(d)], `${b}_nota.txt`, {type:'text/plain'}));
-  state.clips.forEach((c,i)=>{ const ext=/mp4/.test(c.type)?'m4a':'weba';
-    files.push(new File([c.blob], `${b}_vocale${state.clips.length>1?'_'+(i+1):''}.${ext}`, {type:c.type.split(';')[0]})); });
+  state.clips.forEach((c,i)=>{ const m4a=/mp4/.test(c.type);
+    files.push(new File([c.blob], `${b}_vocale${state.clips.length>1?'_'+(i+1):''}.${m4a?'m4a':'weba'}`, {type:m4a?'audio/x-m4a':'audio/webm'})); });
+  return {files, b};
+}
+function schedulePrep(){
+  prepared=null; const v=++prepVer; clearTimeout(prepTimer);
+  if($('saveBtn').disabled) return;
+  prepTimer=setTimeout(()=>buildFiles().then(p=>{ if(v===prepVer) prepared=p; }).catch(()=>{}), 400);
+}
+$('saveBtn').onclick=async()=>{
+  if(!prepared){
+    setStatus('Preparo i file…'); clearTimeout(prepTimer); const v=++prepVer;
+    const p=await buildFiles(); if(v!==prepVer) return; prepared=p;
+    setStatus('File pronti: tocchi di nuovo "Salva su Drive".','ok'); return;
+  }
+  const {files,b}=prepared;
   if(navigator.canShare && navigator.canShare({files})){
     try{ await navigator.share({files, title:`Foto Note ${b}`}); setStatus('Inviato al menu Condividi. Controlli su Drive che il caricamento sia completato.','ok'); }
     catch(e){ setStatus(e.name==='AbortError'?'Condivisione annullata.':'Condivisione non riuscita: '+e.message, e.name==='AbortError'?'':'err'); }
